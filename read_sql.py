@@ -1,5 +1,6 @@
 import sqlite3
 import numpy as np
+import torch
 
 def reward_sqlite(size):
     # Connect to the database
@@ -19,7 +20,7 @@ def reward_sqlite(size):
 
     array = np.reshape(flattened_data, (size, 1))
 
-    return array.tolist()
+    return array
 
 def initial_states_sqlite(size):
     # Connect to the database
@@ -39,7 +40,7 @@ def initial_states_sqlite(size):
 
     array = np.reshape(flattened_data, (size, 7))
 
-    return array.tolist()   
+    return array
 
 def weights_sqlite(size):
     # Connect to the database
@@ -59,7 +60,7 @@ def weights_sqlite(size):
 
     array = np.reshape(flattened_data, (size, 3))
 
-    return array.tolist()
+    return array
 
 def costmap_sqlite(size):
     # Connect to the database
@@ -84,14 +85,18 @@ def costmap_sqlite(size):
     # Reshape the flattened data to the desired shape
     array = np.reshape(flattened_data, (size, 40, 40))
 
-    return array.tolist()
+    return array
 
 
 
 # Usage example
 # size = 10000
 # result = reward_sqlite(size)
+# print(result.shape)
 # result = initial_states_sqlite(size)
+# print(result.shape)
 # result = weights_sqlite(size)
+# print(result.shape)
 # result = costmap_sqlite(size)
+# print(result.shape)
 # print(result)

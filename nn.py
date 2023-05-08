@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-import read_sql
+from read_sql import reward_sqlite, costmap_sqlite, weights_sqlite, initial_states_sqlite
 
 class MyNet(nn.Module):
     def __init__(self):
@@ -28,6 +28,9 @@ class MyNet(nn.Module):
         x = self.relu(self.conv3(x))
         x = self.relu(self.conv4(x))
         x = x.view(-1, 4*4*32)
+
+        # Concatenate the inputs along the channel dimension
+
         x = torch.cat([x, states,costweights], dim=1)
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
@@ -36,7 +39,7 @@ class MyNet(nn.Module):
         x = self.softmax(x)
         return x
 
-def train_net(train_data, batch_size=32, num_epochs=10, lr=0.01):
+def train_net(train_data, batch_size, num_epochs=10, lr=0.01):
 
     # Create network and optimizer
     net = MyNet()
@@ -45,97 +48,108 @@ def train_net(train_data, batch_size=32, num_epochs=10, lr=0.01):
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
-
-    x_train = train_data[0]
-    y_train = train_data[1]
+    x_train, s_train, w_train, y_train = train_data
 
     # Train network
     for epoch in range(num_epochs):
         running_loss = 0.0
         for i in tqdm(range(0, len(x_train), batch_size), desc=f"Epoch {epoch+1}/{num_epochs}", leave=False):
+
             # Get batch of inputs and targets
-            inputs = x_train[i:i+batch_size].to(device)
+            costmaps = x_train[i:i+batch_size].unsqueeze(1).to(device)
+            states = s_train[i:i+batch_size].to(device)
+            weights = w_train[i:i+batch_size].to(device)
             targets = y_train[i:i+batch_size].to(device)
+            targets = targets.squeeze()
+
 
             # Zero the parameter gradients
             optimizer.zero_grad()
 
             # Forward + backward + optimize
-            outputs = net(inputs[:, :1], inputs[:, 1:8], inputs[:, 8:])
+            outputs = net(costmaps, states, weights)
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
 
-            # Print statistics
-            running_loss += loss.item()
-            if (i + 1) % (batch_size * 50) == 0:
-                print('[Epoch %d, Batch %d/%d] Loss: %.3f' %
-                      (epoch + 1, (i + 1) / batch_size, len(x_train) / batch_size, running_loss / (batch_size * 50)))
-                running_loss = 0.0
+            # Update running loss
+            running_loss += loss.item() * costmaps.size(0)
+
+        # Print statistics
+        epoch_loss = running_loss / len(x_train)
+        print(f"Epoch {epoch+1} loss: {epoch_loss:.4f}")
     
     return net
 
-def test_net(net, test_data, batch_size=32):
+def test_net(net, test_data, batch_size):
     net.eval() # switch to evaluation mode
     correct = 0
     total = 0
 
-    input_batch = test_data[0]
-    target_batch = test_data[1]
+    x_test, s_test, w_test, y_test = test_data
 
     with torch.no_grad():
-        for i in range(0, len(test_data), batch_size):
+        for i in range(0, len(x_test), batch_size):
             # Get batch of inputs and targets
-            input_batch = test_data[i:i+batch_size]
-            target_batch = test_data[i:i+batch_size]
+            costmaps = x_test[i:i+batch_size].unsqueeze(1)
+            states = s_test[i:i+batch_size]
+            weights = w_test[i:i+batch_size]
+            targets = y_test[i:i+batch_size]
 
-            # Convert input data to PyTorch tensors
-            x = torch.from_numpy(np.array(input_batch[:, :1])).float()
-            y = torch.from_numpy(np.array(input_batch[:, 1:8])).float()
-            c = torch.from_numpy(np.array(input_batch[:, 8:])).float()
+            # Convert input data to PyTorch tensors and move to GPU if available
+            costmaps = torch.from_numpy(np.array(costmaps)).float()
+            states = torch.from_numpy(np.array(states)).float()
+            weights = torch.from_numpy(np.array(weights)).float()
+            targets = torch.from_numpy(np.array(targets)).long()
 
-            # Move tensors to GPU if available
             if torch.cuda.is_available():
-                x = x.cuda()
-                y = y.cuda()
-                c = c.cuda()
-                target_batch = target_batch.cuda()
+                costmaps = costmaps.cuda()
+                states = states.cuda()
+                weights = weights.cuda()
+                targets = targets.cuda()
 
             # Forward pass
-            output = net(x, y, c)
-            _, predicted = torch.max(output.data, 1)
+            outputs = net(costmaps, states, weights)
+            _, predicted = torch.max(outputs.data, 1)
 
             # Compute accuracy
-            total += target_batch.size(0)
-            correct += (predicted == target_batch).sum().item()
+            total += targets.size(0)
+            correct += (predicted == targets).sum().item()
 
     accuracy = 100.0 * correct / total
     print('Test Accuracy: %d %%' % (accuracy))
     return accuracy
 
-def utility(costmaps, states, costweights, rewards):
 
+def utility(costmaps, states, costweights, rewards):
     # Split data into training and test sets
-    x_train, x_test, y_train, y_test = train_test_split(costmaps, states, costweights, rewards, test_size=0.2, random_state=42)
+    x_train, x_test, y_train, y_test = train_test_split(costmaps, rewards, test_size=0.2, random_state=42)
+    s_train, s_test = train_test_split(states, test_size=0.2, random_state=42)
+    w_train, w_test = train_test_split(costweights, test_size=0.2, random_state=42)
 
     # Convert input data to PyTorch tensors
     x_train = torch.from_numpy(np.array(x_train)).float()
     x_test = torch.from_numpy(np.array(x_test)).float()
     y_train = torch.from_numpy(np.array(y_train)).long()
     y_test = torch.from_numpy(np.array(y_test)).long()
+    s_train = torch.from_numpy(np.array(s_train)).float()
+    s_test = torch.from_numpy(np.array(s_test)).float()
+    w_train = torch.from_numpy(np.array(w_train)).float()
+    w_test = torch.from_numpy(np.array(w_test)).float()
 
-    train_data = (x_train, y_train)
-    test_data = (x_test, y_test)
+    train_data = (x_train, s_train, w_train, y_train)
+    test_data = (x_test, s_test, w_test, y_test)
 
     return train_data, test_data
 
 
-size = 10000
 
-costmaps = read_sql.costmap_sqlite(size)
-states = read_sql.initial_states_sqlite(size)
-costweights = read_sql.weights_sqlite(size)
-rewards =  read_sql.reward_sqlite(size)
+size = 10000
+batch_size = 8
+costmaps = costmap_sqlite(size)
+states = initial_states_sqlite(size)
+costweights = weights_sqlite(size)
+rewards =  reward_sqlite(size)
 
 def main(costmaps, states, costweights, rewards):
     
@@ -143,14 +157,15 @@ def main(costmaps, states, costweights, rewards):
     train_data, test_data = utility(costmaps, states, costweights, rewards)
 
     # Train network
-    net = train_net(train_data)
+    net = train_net(train_data, batch_size)
 
     # Test network
-    test_accuracy = test_net(net, test_data)
+    test_accuracy = test_net(net, test_data, batch_size)
 
     # Save trained network
     torch.save(net.state_dict(), 'trained_network.pth')  
 
+main(costmaps, states, costweights, rewards)
 
 
 
