@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-
+import read_sql
 
 class MyNet(nn.Module):
     def __init__(self):
@@ -130,10 +130,12 @@ def utility(costmaps, states, costweights, rewards):
     return train_data, test_data
 
 
-# costmaps = 
-# states = 
-# costweights = 
-# rewards =  
+size = 10000
+
+costmaps = read_sql.costmap_sqlite(size)
+states = read_sql.initial_states_sqlite(size)
+costweights = read_sql.weights_sqlite(size)
+rewards =  read_sql.reward_sqlite(size)
 
 def main(costmaps, states, costweights, rewards):
     
