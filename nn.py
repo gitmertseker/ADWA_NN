@@ -17,12 +17,21 @@ class MyNet(nn.Module):
         self.fc1 = nn.Linear(4*4*32 + 7 + 3, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, 3)
+        self.fc4 = nn.Linear(64, 3) #for softmax
 
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)
 
+        self.costmaps_normalizer = nn.BatchNorm2d(1)  # Normalizes costmaps
+        self.states_normalizer = nn.BatchNorm1d(7)  # Normalizes states
+        self.costweights_normalizer = nn.BatchNorm1d(3)  # Normalizes costweights
+
     def forward(self, costmaps, states, costweights):
+
+        costmaps = self.costmaps_normalizer(costmaps)
+        states = self.states_normalizer(states)
+        costweights = self.costweights_normalizer(costweights)
+
         x = self.relu(self.conv1(costmaps))
         x = self.relu(self.conv2(x))
         x = self.relu(self.conv3(x))
@@ -39,16 +48,26 @@ class MyNet(nn.Module):
         x = self.softmax(x)
         return x
 
-def train_net(train_data, batch_size, num_epochs=10, lr=0.01):
+
+def train_net(train_data, batch_size, num_epochs=200, lr=0.0005):
 
     # Create network and optimizer
     net = MyNet()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = 'cpu'
     net.to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    criterion = nn.CrossEntropyLoss()
+    class_weights = torch.tensor([1.0, 82/9411, 82/507])
+    # criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     x_train, s_train, w_train, y_train = train_data
+
+    x_train = x_train.to(device)
+    s_train = s_train.to(device)
+    w_train = w_train.to(device)
+    y_train = y_train.to(device)
+
 
     # Train network
     for epoch in range(num_epochs):
@@ -56,19 +75,30 @@ def train_net(train_data, batch_size, num_epochs=10, lr=0.01):
         for i in tqdm(range(0, len(x_train), batch_size), desc=f"Epoch {epoch+1}/{num_epochs}", leave=False):
 
             # Get batch of inputs and targets
-            costmaps = x_train[i:i+batch_size].unsqueeze(1).to(device)
-            states = s_train[i:i+batch_size].to(device)
-            weights = w_train[i:i+batch_size].to(device)
-            targets = y_train[i:i+batch_size].to(device)
+            costmaps = x_train[i:i+batch_size].unsqueeze(1)
+            states = s_train[i:i+batch_size]
+            weights = w_train[i:i+batch_size]
+            targets = y_train[i:i+batch_size]
             targets = targets.squeeze()
 
+
+            costmaps = costmaps.to(device)
+            states = states.to(device)
+            weights = weights.to(device)
+            targets = targets.to(device)
+            class_labels = torch.zeros_like(targets)
+            class_labels[targets==-30] = 0
+            class_labels[targets==0] = 1
+            class_labels[targets==100] = 2
 
             # Zero the parameter gradients
             optimizer.zero_grad()
 
             # Forward + backward + optimize
             outputs = net(costmaps, states, weights)
-            loss = criterion(outputs, targets)
+            loss = criterion(outputs, class_labels)
+
+            # class_labels = class_labels.float()
             loss.backward()
             optimizer.step()
 
@@ -85,6 +115,8 @@ def test_net(net, test_data, batch_size):
     net.eval() # switch to evaluation mode
     correct = 0
     total = 0
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = 'cpu'
 
     x_test, s_test, w_test, y_test = test_data
 
@@ -96,28 +128,35 @@ def test_net(net, test_data, batch_size):
             weights = w_test[i:i+batch_size]
             targets = y_test[i:i+batch_size]
 
+            costmaps = costmaps.to(device)
+            states = states.to(device)
+            weights = weights.to(device)
+            targets = targets.to(device)
+            class_labels = torch.zeros_like(targets)
+            class_labels[targets==-30] = 0
+            class_labels[targets==0] = 1
+            class_labels[targets==100] = 2
+
             # Convert input data to PyTorch tensors and move to GPU if available
             costmaps = torch.from_numpy(np.array(costmaps)).float()
             states = torch.from_numpy(np.array(states)).float()
             weights = torch.from_numpy(np.array(weights)).float()
-            targets = torch.from_numpy(np.array(targets)).long()
-
-            if torch.cuda.is_available():
-                costmaps = costmaps.cuda()
-                states = states.cuda()
-                weights = weights.cuda()
-                targets = targets.cuda()
+            # targets = torch.from_numpy(np.array(targets)).long()
+            targets = torch.from_numpy(np.array(targets))
 
             # Forward pass
             outputs = net(costmaps, states, weights)
             _, predicted = torch.max(outputs.data, 1)
-
+            class_labels = class_labels.squeeze()
             # Compute accuracy
-            total += targets.size(0)
-            correct += (predicted == targets).sum().item()
+            # total += targets.size(0)
+            total += class_labels.size(0)
+            # correct += (predicted == targets).sum().item()
+            correct += (predicted == class_labels).sum().item()
 
     accuracy = 100.0 * correct / total
-    print('Test Accuracy: %d %%' % (accuracy))
+    # print('Test Accuracy: %d %%' % (accuracy))
+    print('Test Accuracy: {:.2f}%'.format(accuracy))
     return accuracy
 
 
@@ -132,6 +171,8 @@ def utility(costmaps, states, costweights, rewards):
     x_test = torch.from_numpy(np.array(x_test)).float()
     y_train = torch.from_numpy(np.array(y_train)).long()
     y_test = torch.from_numpy(np.array(y_test)).long()
+    y_train = torch.from_numpy(np.array(y_train))
+    y_test = torch.from_numpy(np.array(y_test))
     s_train = torch.from_numpy(np.array(s_train)).float()
     s_test = torch.from_numpy(np.array(s_test)).float()
     w_train = torch.from_numpy(np.array(w_train)).float()
@@ -145,7 +186,8 @@ def utility(costmaps, states, costweights, rewards):
 
 
 size = 10000
-batch_size = 8
+# batch_size = 256
+batch_size = 1024
 costmaps = costmap_sqlite(size)
 states = initial_states_sqlite(size)
 costweights = weights_sqlite(size)
