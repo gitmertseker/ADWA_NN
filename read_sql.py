@@ -4,7 +4,7 @@ import torch
 
 def reward_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/10000/reward_list_10000.db")
+    conn = sqlite3.connect("C:/100000/reward_list_100000.db")
     
     # Prepare the SQL statement
     stmt = "SELECT * FROM reward_list"
@@ -24,7 +24,7 @@ def reward_sqlite(size):
 
 def initial_states_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/10000/initial_states_list_10000.db")
+    conn = sqlite3.connect("C:/100000/initial_states_list_100000.db")
     
     # Prepare the SQL statement
     stmt = "SELECT * FROM initial_states_list"
@@ -44,7 +44,7 @@ def initial_states_sqlite(size):
 
 def weights_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/10000/weights_list_10000.db")
+    conn = sqlite3.connect("C:/100000/weights_list_100000.db")
     
     # Prepare the SQL statement
     stmt = "SELECT * FROM weights_list"
@@ -64,7 +64,7 @@ def weights_sqlite(size):
 
 def costmap_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/10000/costmap_list_10000.db")    
+    conn = sqlite3.connect("C:/100000/costmap_list_100000.db")    
 
     # Prepare the SQL statement
     stmt = "SELECT * FROM costmap_list"
