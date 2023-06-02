@@ -1,6 +1,7 @@
 import sqlite3
 import numpy as np
 import torch
+from copy import deepcopy
 
 def reward_sqlite(size):
     # Connect to the database
@@ -102,7 +103,43 @@ def delete_data(rewards,costweights,states,costmaps):
     return costmaps_, states_, costweights_, rewards_
 
 
+def inputs(costmaps,states,costweights):
+    new_costmaps = costmaps
+    new_states = states
+    new_costweights = costweights
+    for i in range(len(costweights)-1):
+        new_costmaps = np.append(new_costmaps,costmaps,axis=0)
+        new_states = np.append(new_states,states,axis=0)
 
+    for z in range(len(states)-1):
+        new_costweights = np.append(new_costweights,costweights,axis=0)
+
+    return new_costmaps, new_states, new_costweights
+
+def normalize_data(states):
+
+    new_states = deepcopy(states)
+    high_x = 19
+    high_y = 9
+    high_goal_x = 20
+    high_goal_y = 10
+    high_theta = 2 * np.pi
+    low_theta = -2 * np.pi
+    min_v = 0
+    max_v = 0.1
+    min_w = -np.pi/4
+    max_w = np.pi/4
+
+    for i in range(len(states)):
+        new_states[i][0] = states[i][0] / high_x
+        new_states[i][1] = states[i][1] / high_y
+        new_states[i][2] = (states[i][2] - low_theta) / (high_theta - low_theta)
+        new_states[i][3] = states[i][3] / high_goal_x
+        new_states[i][4] = states[i][4] / high_goal_y
+        new_states[i][5] = (states[i][5] - min_v) / (max_v - min_v)
+        new_states[i][6] = (states[i][6] - min_w) / (max_w - min_w)
+
+    return new_states
 
 # Usage example
 # size = 10000
