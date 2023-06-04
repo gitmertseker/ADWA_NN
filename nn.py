@@ -98,16 +98,18 @@ def init_weights(m):
         # torch.nn.init.ones_(m.weight)
 
 
-def train_net(train_data, val_data, costweights, batch_size, num_epochs=20, lr=0.0025):  #lr=0.001
+def train_net(train_data, val_data, costweights, batch_size, num_epochs=100, lr=0.001):  #lr=0.001
 
     # Create network and optimizer
     net = MyNet()
-    net.apply(init_weights)
+    net.load_state_dict(torch.load('trained_network_6.pth'))
+    # net.apply(init_weights) #train edilmiş parametreler ile initialize ettim
+
     # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     net.to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=50, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=25, verbose=True)
     # class_weights = torch.tensor([1.0, 82/9411, 82/507]) #for 10000
     # class_weights = torch.tensor([1.0, 752/91109, 752/8139]) #for 100000
     # class_weights = torch.tensor([1.0, 4588/452681, 4588/42731]) #for 500000
@@ -129,7 +131,7 @@ def train_net(train_data, val_data, costweights, batch_size, num_epochs=20, lr=0
 
     best_f1 = 0.0
     epochs_without_improvement = 0
-    max_epochs_without_improvement = 200
+    max_epochs_without_improvement = 60
 
     # Train network
     for epoch in range(num_epochs):
@@ -139,13 +141,22 @@ def train_net(train_data, val_data, costweights, batch_size, num_epochs=20, lr=0
         net.train()
         for i in tqdm(range(0, len(x_train), batch_size), desc=f"Epoch {epoch+1}/{num_epochs}", leave=False):
 
+            if i + batch_size <= len(x_train):
             # Get batch of inputs and targets
-            costmaps = x_train[i:i+batch_size].unsqueeze(1)
-            states = s_train[i:i+batch_size]
-            # weights = w_train[i:i+batch_size]
-            target_batch_size = batch_size * len(costweights)
-            targets = y_train[i:i+target_batch_size]
-            targets = targets.squeeze()
+                costmaps = x_train[i:i+batch_size].unsqueeze(1)
+                states = s_train[i:i+batch_size]
+                # weights = w_train[i:i+batch_size]
+                target_batch_size = batch_size * len(costweights)
+                targets = y_train[i:i+target_batch_size]
+                targets = targets.squeeze()
+
+            else:
+                # Handle the remaining samples
+                remaining_samples = len(x_train) - i
+                costmaps = x_train[i:].unsqueeze(1)
+                states = s_train[i:]
+                targets = y_train[i:i+remaining_samples*len(costweights)]
+                targets = targets.squeeze()
 
 
             costmaps = costmaps.to(device)
@@ -189,12 +200,22 @@ def train_net(train_data, val_data, costweights, batch_size, num_epochs=20, lr=0
 
         with torch.no_grad():
             for i in range(0, len(x_val), batch_size):
-                costmaps = x_val[i:i+batch_size].unsqueeze(1)
-                states = s_val[i:i+batch_size]
-                # weights = w_val[i:i+batch_size]
-                target_batch_size = batch_size * len(costweights)
-                targets = y_val[i:i+target_batch_size]
-                targets = targets.squeeze()
+
+                if i + batch_size <= len(x_val):
+                    costmaps = x_val[i:i+batch_size].unsqueeze(1)
+                    states = s_val[i:i+batch_size]
+                    # weights = w_val[i:i+batch_size]
+                    target_batch_size = batch_size * len(costweights)
+                    targets = y_val[i:i+target_batch_size]
+                    targets = targets.squeeze()
+
+                else:
+                    # Handle the remaining samples
+                    remaining_samples = len(x_val) - i
+                    costmaps = x_val[i:].unsqueeze(1)
+                    states = s_val[i:]
+                    targets = y_val[i:i+remaining_samples*len(costweights)]
+                    targets = targets.squeeze()
 
                 class_labels = torch.zeros_like(targets)
                 class_labels[targets==-30] = 0
@@ -309,15 +330,15 @@ def test_net(net, test_data, costweights, batch_size):
     print('Test Accuracy: {:.2f}%'.format(accuracy))
 
     # Calculate F1 score
-    # f1_scores = []
-    # for label in range(3):
-    #     mask = true_labels == label
-    #     f1 = f1_score(true_labels[mask], predicted_labels[mask], average='weighted')
-    #     f1_scores.append(f1)
-    #     print(f"F1 Score (Label {label}): {f1:.4f}")
+    f1_scores = []
+    for label in range(3):
+        mask = true_labels == label
+        f1 = f1_score(true_labels[mask], predicted_labels[mask], average='weighted')
+        f1_scores.append(f1)
+        print(f"F1 Score (Label {label}): {f1:.4f}")
 
     # target_names = ['obstacle', 'terminated', 'goal']
-    print(classification_report(true_labels,predicted_labels,sample_weight=class_weights))
+    # print(classification_report(true_labels,predicted_labels,sample_weight=class_weights))
 
     return accuracy
 
@@ -363,7 +384,8 @@ def utility(costmaps, states, rewards):
 # size = 500000
 size = 500
 # batch_size = 128
-batch_size = 8 #4 tü
+batch_size = 12 #4 tü
+# batch_size = 6
 # batch_size = 50
 weight_size = 360
 reward_size = size * weight_size
@@ -392,7 +414,7 @@ def main(costmaps, states, costweights, rewards):
     test_accuracy = test_net(net, test_data, costweights, batch_size)
 
     # Save trained network
-    torch.save(net.state_dict(), 'trained_network.pth')  
+    torch.save(net.state_dict(), 'trained_network_7.pth')  
 
 main(costmaps, states, costweights, rewards)
 

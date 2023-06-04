@@ -5,7 +5,7 @@ from copy import deepcopy
 
 def reward_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/500/reward_list_500.db")
+    conn = sqlite3.connect("D:/python/adwa_nn/500_discrete_cw/reward_list_500.db")
     
     # Prepare the SQL statement
     stmt = "SELECT * FROM reward_list"
@@ -25,7 +25,7 @@ def reward_sqlite(size):
 
 def initial_states_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/500/initial_states_list_500.db")
+    conn = sqlite3.connect("D:/python/adwa_nn/500_discrete_cw/initial_states_list_500.db")
     
     # Prepare the SQL statement
     stmt = "SELECT * FROM initial_states_list"
@@ -45,7 +45,7 @@ def initial_states_sqlite(size):
 
 def weights_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/500/weights_list_360.db")
+    conn = sqlite3.connect("D:/python/adwa_nn/500_discrete_cw/weights_list_360.db")
     
     # Prepare the SQL statement
     stmt = "SELECT * FROM weights_list"
@@ -65,7 +65,7 @@ def weights_sqlite(size):
 
 def costmap_sqlite(size):
     # Connect to the database
-    conn = sqlite3.connect("C:/500/costmap_list_500.db")    
+    conn = sqlite3.connect("D:/python/adwa_nn/500_discrete_cw/costmap_list_500.db")    
 
     # Prepare the SQL statement
     stmt = "SELECT * FROM costmap_list"
