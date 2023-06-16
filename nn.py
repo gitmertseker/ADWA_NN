@@ -98,23 +98,26 @@ def init_weights(m):
         # torch.nn.init.ones_(m.weight)
 
 
-def train_net(train_data, val_data, costweights, batch_size, num_epochs=70, lr=0.002):  #lr=0.001
+def train_net(train_data, val_data, costweights, batch_size, num_epochs=100, lr=0.001):  #lr=0.001
 
     # Create network and optimizer
     net = MyNet()
-    net.load_state_dict(torch.load('trained_network_2_0.pth')) #train edilmiş parametreler ile initialize ettim
+    net.load_state_dict(torch.load('trained_network_1.pth')) #train edilmiş parametreler ile initialize ettim
     # net.apply(init_weights) 
 
     # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     net.to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=99, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=25, verbose=True)
     # class_weights = torch.tensor([1.0, 82/9411, 82/507]) #for 10000
     # class_weights = torch.tensor([1.0, 752/91109, 752/8139]) #for 100000
     # class_weights = torch.tensor([1.0, 4588/452681, 4588/42731]) #for 500000
-    class_weights = torch.tensor([13649/70133, 13649/96218, 1]) #for 180000
+    # class_weights = torch.tensor([13649/70133, 13649/96218, 1]) #for 180000
     # class_weights = torch.tensor([29219/117837, 29219/212944, 1]) #for 360000
+    # class_weights = torch.tensor([18/714, 1, 18/6468]) #for 7200
+    class_weights = torch.tensor([25/714, 1, 25/6468]) #for 7200
+
     # criterion = nn.CrossEntropyLoss()
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
@@ -132,7 +135,7 @@ def train_net(train_data, val_data, costweights, batch_size, num_epochs=70, lr=0
 
     best_f1 = 0.0
     epochs_without_improvement = 0
-    max_epochs_without_improvement = 90
+    max_epochs_without_improvement = 150
 
     # Train network
     for epoch in range(num_epochs):
@@ -383,10 +386,10 @@ def utility(costmaps, states, rewards):
 # size = 10000
 # size = 100000
 # size = 500000
-size = 500
+size = 20
 # size = 1000
 # batch_size = 128
-batch_size = 6 #4 tü
+batch_size = 2 #4 tü
 # batch_size = 6
 # batch_size = 50
 weight_size = 360
@@ -416,7 +419,7 @@ def main(costmaps, states, costweights, rewards):
     test_accuracy = test_net(net, test_data, costweights, batch_size)
 
     # Save trained network
-    torch.save(net.state_dict(), 'trained_network_2_1.pth')  
+    torch.save(net.state_dict(), 'trained_network_2.pth')  
 
 main(costmaps, states, costweights, rewards)
 
